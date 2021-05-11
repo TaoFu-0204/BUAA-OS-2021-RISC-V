@@ -11,24 +11,6 @@
 
 #include <asm/regdef.h>
 #include <asm/asm.h>
-/*.section .text.exc_vec3
-NESTED(except_vec3, 0, sp)
-        .set noreorder
-        1:
-//DEBUG
-//addi sp, sp, -4
-//jal DEBUG_exc_mark
-//nop
-//addi sp, sp, 4
-        mfc0 k1,CP0_CAUSE
-        la k0,exception_handlers
-        andi k1,0x7c
-        addu k0,k1
-        lw k0,(k0)
-        NOP
-        jr k0
-        nop
-END(except_vec3)*/
 
 .data
             .global mCONTEXT
@@ -48,14 +30,18 @@ tlbra:
 KERNEL_STACK:
             .space 0x8000
 
-.text
+.section .text.start_mos
 LEAF(_start_mos)
 
     	/* Set up stack */
 	la	sp, KERNEL_STACK
 	li	t0, 0x08000
 	add	sp, sp, t0
-
+	la	t1, start_exc_vec
+	ld	t1, 0(t1)
+	li	t1, 0x80200040
+	csrrw	t1, stvec, t1
+	//sfence.vma
 	//li	t0, 0x80600000
 	//la	t1, mCONTEXT
 	//sd	t0, 0(t1)
@@ -67,6 +53,26 @@ loop:
     j    loop
     nop
 END(_start_mos)
+
+	.section .text.exc_vec
+NESTED(except_vec, 0, sp)
+//        .set noreorder
+//        1:
+//DEBUG
+//addi sp, sp, -4
+//jal DEBUG_exc_mark
+//nop
+//addi sp, sp, 4
+	call	exc_handler
+/*        mfc0 k1,CP0_CAUSE
+        la k0,exception_handlers
+        andi k1,0x7c
+        addu k0,k1
+        lw k0,(k0)
+        NOP
+        jr k0
+        nop*/
+END(except_vec)
 /*
 .section .data
 	.align 12

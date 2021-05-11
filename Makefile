@@ -16,7 +16,7 @@ vmlinux_elf	  := gxemul/vmlinux
 link_script   := $(tools_dir)/scse0_3.lds
 
 modules		  := boot drivers init lib mm user
-objects		  := $(boot_dir)/start.o			  \
+objects		  := $(boot_dir)/*.o			  \
 				 $(init_dir)/main.o			  \
 				 $(init_dir)/init.o			  \
 				 $(init_dir)/code.o			  \

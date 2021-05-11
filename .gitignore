@@ -1,0 +1,6 @@
+*.o
+*.swp
+objdump.txt
+out.txt
+*.x
+*.bin

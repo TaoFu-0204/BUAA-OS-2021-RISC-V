@@ -5,7 +5,7 @@
 //#include <kclock.h>
 //#include <trap.h>
 #include <types.h>
-//#include <mmu.h>
+#include <mmu.h>
 
 extern char aoutcode[];
 extern char boutcode[];
@@ -20,7 +20,7 @@ void riscv_init()
 	riscv_detect_memory();
 	printf("mem dect success!\n");
 	riscv_vm_init();
-	a = 0x7f800000;
+	a = UPAGES;//0x7f800000;
 	printf("UPAGES:%lx, ", a);
 	printf("value:%lx\n", *((u_int64_t *)a));
 	page_init();

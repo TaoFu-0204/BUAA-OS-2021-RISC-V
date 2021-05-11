@@ -279,7 +279,7 @@ printf("ready to set vpt at vpt2: %lx, ppn: %lx\n", vpt2, PPN(vpt2));
 	test_vaddr_map(vpt2, start_text, start_text);
 	printf("TEST:%lx->%lx\n", start_data, start_data);
 	test_vaddr_map(vpt2, start_data, start_data);
-	u_int64_t testdata = 0x0000000080203930;
+	u_int64_t testdata = 0x0000000080203886;
 	printf("TEST:%lx->%lx\n", testdata, testdata);
 	test_vaddr_map(vpt2, testdata, testdata);
     /* Set up VPT register. */
@@ -287,7 +287,7 @@ printf("ready to set vpt at vpt2: %lx, ppn: %lx\n", vpt2, PPN(vpt2));
 
     printf("pmap.c:\t risc-v vm init success\n");
     printf("former satp:%lx\npages:%lx\nenvs:%lx\n", n, pages, envs);
-    u_int64_t *tmpptr = envs;
+    u_int64_t *tmpptr = UENVS;
 printf("tmpptr:%lx,*tmpptr:%lx\n", tmpptr, *tmpptr);
     //*tmpptr = 0x8765432112345678;
 printf("write succ!\n");
@@ -304,23 +304,25 @@ page_init(void)
 {
     /* Step 1: Initialize page_free_list. */
     /* Hint: Use macro `LIST_INIT` defined in include/queue.h. */
+printf("Enter page_init!\n");
     LIST_INIT(&page_free_list);
-
+printf("Page_init list_init end!\n");
     /* Step 2: Align `freemem` up to multiple of BY2PG. */
     freemem = ROUND(freemem, BY2PG);
-
+printf("Page_init freemem_round end!\n");
     /* Step 3: Mark all memory blow `freemem` as used(set `pp_ref`
      * filed to 1) */
     int cur;
     for (cur = 0; cur < PPN(PADDR(freemem)); cur++) {
         pages[cur].pp_ref = 1;
     }
-
+printf("Page_init used pages[] init end!\n");
     /* Step 4: Mark the other memory as free. */
     for (cur = PPN(PADDR(freemem)); cur < npage; cur++) {
         pages[cur].pp_ref = 0;
         LIST_INSERT_HEAD(&page_free_list, &pages[cur], pp_link);
     }
+printf("End of page_init!\n");
 }
 
 // Overview:

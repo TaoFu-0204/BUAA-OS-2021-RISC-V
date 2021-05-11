@@ -31,14 +31,31 @@ LEAF(set_vpt2)
 	or	a0, a0, a1
 	or	a0, a0, a2
 
-	call	asmprint
+	//call	asmprint
 	
 //	li	t0, 0xFFFFFFFFFFFFFFFF
 	csrrw	a0, satp, a0
-	call	asmprint
+	//call	asmprint
 	sfence.vma
-	call	asmprint
-	mv	a0, ra	
-	call	asmprint
+	//call	asmprint
+	//mv	a0, ra	
+	//call	asmprint
 	jalr	zero, 0(ra)
+	//nop
 END(set_vpt2)
+
+LEAF(set_exc_vec)
+	li 	t0, 0xFFFFFFFFFFFFFFFC
+	and	a0, a0, t0
+
+	li	t0, 0x0000000000000003
+	and	a1, a1, t0
+	
+	or	a0, a0, a1
+
+	csrrw	a0, stvec, a0
+//	sfence.vma
+
+	jalr	zero, 0(ra)
+	//nop
+END(set_exc_vec)

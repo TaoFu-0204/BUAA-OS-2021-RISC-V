@@ -161,6 +161,7 @@ extern volatile Pte *vpt[];
 extern volatile Pde *vpd[];
 
 extern u_int64_t set_vpt2(u_int64, u_int64, u_int64);
+extern u_int64_t set_exc_vec(u_int64, u_int64);
 
 // translates from kernel virtual address to physical address.
 #define PADDR(kva)						\

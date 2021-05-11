@@ -4,17 +4,24 @@ BASE_ADDRESS = 0x80200000;
 
 SECTIONS
 {
-  /*. = 0x80000080;
-  .except_vec3 : {
-        *(.text.exc_vec3)
+  /*. = 0x78000080;
+  start_exc_vec = .;
+  .exc_vec : {
+        *(.text.exc_vec)
   }*/
 
   . = BASE_ADDRESS;
 
   start_text = . ;
   .text : {
-	*(.text ._start_mos)
+	*(.text.start_mos)
         *(.text)
+    }
+
+  . = ALIGN(4K);
+  start_exc_vec = . ;
+  .exc_vec : {
+	*(.text.exc_vec)
     }
 
   . = ALIGN(4K);

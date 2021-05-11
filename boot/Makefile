@@ -10,12 +10,16 @@ INCLUDES	  := -I../include/
 
 # ======== End of configuration ===
 
+%.o: %.c
+	$(CC) $(CFLAGS) $(INCLUDES) -c $<
+
+
 %.o: %.S
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< 
 
 .PHONY: clean
 
-all: start.o
+all: start.o exc_hand.o
 
 clean:
 	rm -rf *~ *.o
