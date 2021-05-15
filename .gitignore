@@ -4,3 +4,4 @@ objdump.txt
 out.txt
 *.x
 *.bin
+QEMU_*.txt

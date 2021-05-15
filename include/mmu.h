@@ -70,7 +70,7 @@
  o                      +----------------------------+----|-------Physics Memory Max
  o                      |       ...                  |  kseg0
  o                      +----------------------------+----|------
- o                      |           VPT2             |    |
+ o                      |     RISC-V SV39 VPT2       |    |
  o  VPT,KSTACKTOP-----> +----------------------------+----|-------0x8060 0000 <-------end
  o                      |       Kernel Stack         |    | KSTKSIZE            /|\
  o                      +----------------------------+----|------                |
@@ -163,6 +163,11 @@ extern volatile Pde *vpd[];
 extern u_int64_t set_vpt2(u_int64, u_int64, u_int64);
 extern u_int64_t set_exc_vec(u_int64, u_int64);
 
+/* Note:
+ * In RISC-V, physical address starts from 0x80000000.
+ * We assume that we has 128MB free memory, so max 
+ * PADDR is 0x80000000 + 128MB = 2^27B + 0x80000000 = 0x8FFFFFFF
+ */
 // translates from kernel virtual address to physical address.
 #define PADDR(kva)						\
 	({								\

@@ -241,7 +241,7 @@ printf(".kern_stk:\tfrom:%lxto:%lx\n", start_kern_stk, end_kern_stk);
     boot_map_segment(vpt2, vpt2, BY2PG, vpt2, PTE_R);
 
     printf(".text need:0x%lx B\n", (u_int64_t)end_text - (u_int64_t)start_text);
-    boot_map_segment(vpt2, start_text, (u_int64_t)end_text - (u_int64_t)start_text, start_text, PTE_R | PTE_W | PTE_X);
+    boot_map_segment(vpt2, start_text, (u_int64_t)end_text - (u_int64_t)start_text, start_text, PTE_R | PTE_X);
     printf(".text mapped!\n");
 
 printf(".bss need:0x%lx B\n", (u_int64_t)end_bss - (u_int64_t)start_bss);

@@ -38,8 +38,7 @@ LEAF(_start_mos)
 	li	t0, 0x08000
 	add	sp, sp, t0
 	la	t1, start_exc_vec
-	ld	t1, 0(t1)
-	li	t1, 0x80200040
+	//li	t1, 0x80204000
 	csrrw	t1, stvec, t1
 	//sfence.vma
 	//li	t0, 0x80600000
