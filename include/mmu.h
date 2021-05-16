@@ -175,7 +175,7 @@ extern u_int64_t set_exc_vec(u_int64, u_int64);
 		u_int64_t a = (u_int64_t) (pa);					\
 		if (a < 0x080000000 || a > 0x08FFFFFFF)				\
 			panic("PADDR2ACTMEM called with invalid pa %016lx", a);\
-		a - 0x080000000;							\
+		a - 0x080000000;						\
 	})
 
 // translates from kernel virtual address to physical address.

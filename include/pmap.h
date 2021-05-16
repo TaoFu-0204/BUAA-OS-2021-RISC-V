@@ -46,7 +46,7 @@ pa2page(u_int64_t pa)
 		panic("pa2page called with invalid pa: %x", pa);
 	}
 
-	return &pages[PPN(pa)];
+	return &pages[PPN(PADDR2ACTMEM(pa))];
 }
 
 /* Get the kernel virtual address of Page 'pp'.
