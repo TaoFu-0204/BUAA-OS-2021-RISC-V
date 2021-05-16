@@ -62,6 +62,9 @@ NESTED(except_vec, 0, sp)
 //jal DEBUG_exc_mark
 //nop
 //addi sp, sp, 4
+	csrr	a1, stval
+	csrr	a0, scause
+	csrr	a2, sepc
 	call	exc_handler
 /*        mfc0 k1,CP0_CAUSE
         la k0,exception_handlers

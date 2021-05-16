@@ -28,7 +28,7 @@ void riscv_detect_memory()
 {
     /* Step 1: Initialize basemem.
      * (When use real computer, CMOS tells us how many kilobytes there are). */
-    maxpa = 0x090000000; // 2^26 Bytes, 64MB
+    maxpa = 0x088000000; // 2^26 Bytes, 64MB
     //maxpa = 0x1000000;
     // npage = maxpa >> PGSHIFT; // 2^12 Bytes, 4KB per page
     basemem = maxpa - 0x080000000;
@@ -138,29 +138,36 @@ static Pte *boot_vpt2_walk(Pte *vpt2, u_int64_t va, int create)
 
     /* Step 3: Get the page table entry for `va`, and return it. */
     vpt1_entry = vpt1 + VPN1(va);
-printf("Ret:%lx, value:%lx\n", vpt1_entry, *vpt1_entry);
+//printf("Ret:%lx, value:%lx\n", vpt1_entry, *vpt1_entry);
     return vpt1_entry;
 
 }
 
+// Overview:
+// 	Map vpt to vpt.
+//	table rooted at pgdir.
 void boot_map_vpt(Pte *vpt2, Pte *vpt)
 {
 	u_int64_t va = (u_int64_t)vpt, pte;
 	Pte *vpt1, *vpt1_ent, *vpt0, *vpt0_ent;
 	int vpt1_new = 0, vpt0_new = 0;
+	//printf("vpt2_ent:0x%lx\n", vpt2+VPN2(va));
 	if ((vpt2[VPN2(va)] & PTE_V) == 0) {
 		vpt1_new = 1;
 		vpt1 = (Pte *)alloc(BY2PG, BY2PG, 1);
 		vpt2[VPN2(va)] = PADDR_TO_PTE(vpt1) | PTE_V;
 	}
 	vpt1 = PTE_TO_PADDR(vpt2[VPN2(va)]);
+	//printf("vpt1_ent:0x%lx\n", vpt1+VPN1(va));
 	if ((vpt1[VPN1(va)] & PTE_V) == 0) {
 		vpt0_new = 1;
 		vpt0 = (Pte *)alloc(BY2PG, BY2PG, 1);
 		vpt1[VPN1(va)] = PADDR_TO_PTE(vpt0) | PTE_V;
 	}
 	vpt0 = PTE_TO_PADDR(vpt1[VPN1(va)]);
-	vpt0[VPN0(va)] = PADDR_TO_PTE(va) | PTE_V | PTE_R;
+	//printf("vpt0_ent:0x%lx\n", vpt0+VPN0(va));
+	//printf("%d, %d, %lx\n", vpt1_new, vpt0_new, &vpt0[VPN0(va)]);
+	vpt0[VPN0(va)] = PADDR_TO_PTE(va) | PTE_V | PTE_R | PTE_W;
 	if (vpt1_new) {
 		boot_map_vpt(vpt2, vpt1);
 	}
@@ -190,12 +197,12 @@ void boot_map_segment(Pte *vpt2, u_int64_t va, u_int64_t size, u_int64_t pa, u_i
 printf("Map size not 4K aligned!\n");
         return;
     }
-printf("With perm %lx to map: va from %lx to %lx, pa from %lx to %lx\n", perm, va, va + size, pa, pa+size);
+//printf("With perm %lx to map: va from %lx to %lx, pa from %lx to %lx\n", perm, va, va + size, pa, pa+size);
     /* Step 2: Map virtual address space to physical address. */
 
     /* If not aligned to VPT1MAP */
     if (va % VPT1MAP != 0) {
-	printf("NOT ALIGNED TO VPT1MAP\n");
+	//printf("NOT ALIGNED TO VPT1MAP\n");
 	vpt1_entry = boot_vpt2_walk(vpt2, va, 1);/*We have vpt1 now*/
 	//vpt1 = vpt1_entry - (vpt1_entry % BY2PG);
 	vpt1 = (u_int64_t)vpt1_entry & 0xFFFFFFFFFFFFF000;
@@ -229,11 +236,13 @@ printf("With perm %lx to map: va from %lx to %lx, pa from %lx to %lx\n", perm, v
     /* Now we are aligned to VPT1MAP. */
 
     for(i = 0; i < size; i += VPT1MAP) {
-	printf("Try to map 1 VPT1MAP\n");
+	//printf("Try to map 1 VPT1MAP\n");
         vpt1_entry = boot_vpt2_walk(vpt2, (va + i), 1);
-	printf("VPT1_entry value:%lx, PADDR:%lx\n", *vpt1_entry, PTE_TO_PADDR(*vpt1_entry));
+	//printf("VPT1_entry value:%lx, PADDR:%lx\n", *vpt1_entry, vpt1_entry);
 	vpt1 = (u_int64_t)vpt1_entry & 0xFFFFFFFFFFFFF000; //vpt1 = vpt1_entry - (vpt1_entry % BY2PG);
+	//printf("vpt1:0x%lx to map!\n", vpt1);
 	boot_map_vpt(vpt2, vpt1);
+	//printf("vpt1 mapped!\n");
 	for(j = 0; j < MIN(size - i, VPT1MAP); j += BY2PG) {
 	    vpt0_entry = boot_vpt1_walk(vpt1, (va + i + j), 1);
 	    vpt0 = (u_int64_t)vpt0_entry & 0xFFFFFFFFFFFFF000;
@@ -246,7 +255,7 @@ printf("With perm %lx to map: va from %lx to %lx, pa from %lx to %lx\n", perm, v
     }
     Pte *vpt2_entry;
     vpt2_entry = vpt2 + VPN2(va);
-    printf("va:%lx, VPT2_entry value:%lx, PADDR:%lx\n", va, *vpt2_entry, PTE_TO_PADDR(*vpt2_entry));
+    //printf("va:%lx, VPT2_entry value:%lx, PADDR:%lx\n", va, *vpt2_entry, PTE_TO_PADDR(*vpt2_entry));
 }
 
 /* Overview:
@@ -254,7 +263,7 @@ printf("With perm %lx to map: va from %lx to %lx, pa from %lx to %lx\n", perm, v
  */
 void boot_unmap(Pte *vpt2, u_int64_t va)
 {
-printf("boot_unmap!\n");
+//printf("boot_unmap!\n");
 	Pte *vpt1, *vpt0;
 	u_int64_t pte;
 	pte = (u_int64_t)vpt2[VPN2(va)];
@@ -350,6 +359,14 @@ printf(".data need:0x%lx B\n", (u_int64_t)end_data - (u_int64_t)start_data);
     envs_paddr = envs;
     envs = UENVS;
 
+	u_int64_t tmpva = 0x090000000;
+    boot_map_segment(vpt2, tmpva, BY2PG, tmpva, PTE_R | PTE_W);
+	printf("TEST:%lx->%lx\n", tmpva, tmpva);
+	test_vaddr_map(vpt2, tmpva, tmpva);
+    boot_unmap(vpt2, tmpva);
+	printf("TEST:%lx->%lx\n", tmpva, tmpva);
+	test_vaddr_map(vpt2, tmpva, tmpva);
+
 printf("ready to set vpt at vpt2: %lx, ppn: %lx\n", vpt2, PPN(vpt2));
 
 	printf("TEST:%lx->%lx\n", start_text, start_text);
@@ -424,21 +441,29 @@ printf("page_alloc() start!\n");
 //      panic("mei you kong ye le !!!!!!");
         return -E_NO_MEM;
     }
-printf("1");
+//printf("1");
     ppage_temp = LIST_FIRST(&page_free_list);
-printf("2");
+//printf("2");
     LIST_REMOVE(ppage_temp, pp_link);
-printf("3");
+//printf("3");
     *pp = ppage_temp;
-printf("4");
+//printf("4\n");
     /* Step 2: Initialize this page.
      * Hint: use `bzero`. */
     /* Note: pa == va. */
-    void *page_pa, *page_va = 0x90000000;
+    void *page_pa, *page_va = 0x090000000;
     page_pa = (void *)page2pa(ppage_temp);
     boot_map_segment(boot_vpt2, page_va, BY2PG, page_pa, PTE_R | PTE_W);
-tlb_invalidate(boot_vpt2, page_va);
-printf("start:%08lx, end:%08lx\n", page_pa, page_pa+BY2PG);
+//printf("Map temp addr %lx to paddr %lx succ!\n", page_va, page_pa);
+    tlb_invalidate(boot_vpt2, page_va);
+	//printf("TEST:%lx->%lx\n", page_va, page_pa);
+	//test_vaddr_map(boot_vpt2, page_va, page_pa);
+//printf("start:%08lx, end:%08lx\n", page_pa, page_pa+BY2PG);
+//u_int64_t *tp = 0x090000008;
+//page_pa = *tp;
+//*tp = page_pa;
+//printf("*tp=%lx\n", page_pa);
+
     bzero(page_va, BY2PG);
     boot_unmap(boot_vpt2, page_va);
 printf("page_alloc() success!\n");
@@ -470,6 +495,53 @@ page_free(struct Page *pp)
 }
 
 // Overview:
+// 	Map vpt to vpt.
+//	table rooted at vpt2.
+void page_map_vpt(Pte *vpt2, Pte *vpt)
+{
+	struct Page *ppage;
+	u_int64_t va = (u_int64_t)vpt, pte;
+	Pte *vpt1, *vpt1_ent, *vpt0, *vpt0_ent;
+	int vpt1_new = 0, vpt0_new = 0;
+	//printf("vpt2_ent:0x%lx\n", vpt2+VPN2(va));
+	if ((vpt2[VPN2(va)] & PTE_V) == 0) {
+		vpt1_new = 1;
+		if(page_alloc(&ppage) == -E_NO_MEM) {
+			return -E_NO_MEM;
+			// No memory.
+		}
+		vpt1 = page2pa(ppage);
+		vpt2[VPN2(va)] = PADDR_TO_PTE(vpt1) | PTE_V;
+		tlb_invalidate(vpt2, vpt1);
+	}
+	vpt1 = PTE_TO_PADDR(vpt2[VPN2(va)]);
+	if (vpt1_new) {
+		page_map_vpt(vpt2, vpt1);
+	}
+	//printf("vpt1_ent:0x%lx\n", vpt1+VPN1(va));
+	if ((vpt1[VPN1(va)] & PTE_V) == 0) {
+		vpt0_new = 1;
+		vpt0 = (Pte *)alloc(BY2PG, BY2PG, 1);
+		vpt1[VPN1(va)] = PADDR_TO_PTE(vpt0) | PTE_V;
+		tlb_invalidate(vpt2, vpt0);
+	}
+	vpt0 = PTE_TO_PADDR(vpt1[VPN1(va)]);
+	if (vpt0_new) {
+		page_map_vpt(vpt2, vpt0);
+	}
+	//printf("vpt0_ent:0x%lx\n", vpt0+VPN0(va));
+	//printf("%d, %d, %lx\n", vpt1_new, vpt0_new, &vpt0[VPN0(va)]);
+	vpt0[VPN0(va)] = PADDR_TO_PTE(va) | PTE_V | PTE_R | PTE_W;
+	tlb_invalidate(vpt2, va);
+	/*if (vpt1_new) {
+		boot_map_vpt(vpt2, vpt1);
+	}
+	if (vpt0_new) {
+		boot_map_vpt(vpt2, vpt0);
+	}*/
+}
+
+// Overview:
 // 	Given `pgdir`, a pointer to a page directory, pgdir_walk returns a pointer 
 // 	to the page table entry (with permission PTE_R|PTE_V) for virtual address 'va'.
 //
@@ -486,20 +558,21 @@ page_free(struct Page *pp)
 //	whether this function execute successfully or not.
 //  This function have something in common with function `boot_vpt2_walk`.
 int
-pgdir_walk(Pde *pgdir, u_long va, int create, Pte **ppte)
+vpt2_walk(Pte *vpt2, u_int64_t va, int create, Pte **vpt0e)
 {
+/*
     Pde *pgdir_entryp;
     Pte *pgtable;
     struct Page *ppage;
 
-    /* Step 1: Get the corresponding page directory entry and page table. */
+    * Step 1: Get the corresponding page directory entry and page table. 
     pgdir_entryp = pgdir + PDX(va);
     pgtable = KADDR(PTE_ADDR(*pgdir_entryp));
 
-    /* Step 2: If the corresponding page table is not exist(valid) and parameter `create`
+     * Step 2: If the corresponding page table is not exist(valid) and parameter `create`
      * is set, create one. And set the correct permission bits for this new page
      * table.
-     * When creating new page table, maybe out of memory. */
+     * When creating new page table, maybe out of memory. 
     if (((*pgdir_entryp) & PTE_V) != PTE_V) {
         *ppte = NULL;
         if (create == 1) {
@@ -515,10 +588,54 @@ pgdir_walk(Pde *pgdir, u_long va, int create, Pte **ppte)
         // Update page directory.
     }
     else {
-    /* Step 3: Set the page table entry to `*ppte` as return value. */
+     * Step 3: Set the page table entry to `*ppte` as return value. 
         *ppte = pgtable + PTX(va);
     }
     return 0;
+*/
+	Pte *vpt2_ent, *vpt1, *vpt1_ent, *vpt0;
+	
+	Pte *pg_paddr;
+	struct Page *ppage;
+
+	vpt2_ent = vpt2 + VPN2(va);
+	if ((*vpt2_ent & PTE_V) == 0) { // VPT2 invalid
+		*vpt0e = NULL;
+		if (create == 1) {
+			if(page_alloc(&ppage) == -E_NO_MEM) {
+				return -E_NO_MEM;
+				// No memory.
+			}
+			vpt1 = page2pa(ppage); // Note: Physical address of vpt1
+			// Reg vpt1 into page table
+			page_map_vpt(vpt2, vpt1);
+		}
+		else {
+			return 0;
+		}
+	}
+	vpt1 = (Pte *)PTE_TO_PADDR(*vpt2_ent);
+	
+	vpt1_ent = vpt1 + VPN1(va);
+	if ((*vpt1_ent & PTE_V) == 0) { // VPT1 invalid
+		*vpt0e = NULL;
+		if (create == 1) {
+			if(page_alloc(&ppage) == -E_NO_MEM) {
+				return -E_NO_MEM;
+				// No memory.
+			}
+			vpt0 = page2pa(ppage); // Note: Physical address of vpt0
+			// Reg vpt0 into page table
+			page_map_vpt(vpt2, vpt0);
+		}
+		else {
+			return 0;
+		}
+	}
+	vpt0 = (Pte *)PTE_TO_PADDR(*vpt1_ent);
+	
+	*vpt0e = vpt0 + VPN0(va);
+	return 0;
 }
 
 // Overview:
@@ -533,21 +650,21 @@ pgdir_walk(Pde *pgdir, u_long va, int create, Pte **ppte)
 //	If there is already a page mapped at `va`, call page_remove() to release this mapping.
 //	The `pp_ref` should be incremented if the insertion succeeds.
 int
-page_insert(Pde *pgdir, struct Page *pp, u_long va, u_int perm)
+page_insert(Pte *vpt2, struct Page *pp, u_long va, u_int perm)
 {
     u_int PERM;
-    Pte *pgtable_entry;
+    Pte *vpt0_entry;
     PERM = perm | PTE_V;
 
     /* Step 1: Get corresponding page table entry. */
-    pgdir_walk(pgdir, va, 0, &pgtable_entry);
+    vpt2_walk(vpt2, va, 0, &vpt0_entry);
 
-    if ((pgtable_entry != 0) && ((*pgtable_entry & PTE_V) != 0)) {
-        if (pa2page(*pgtable_entry) != pp) {
-            page_remove(pgdir, va);
+    if ((vpt0_entry != 0) && ((*vpt0_entry & PTE_V) != 0)) {
+        if (pa2page(PTE_TO_PADDR(*vpt0_entry)) != pp) {
+            page_remove(vpt2, va);
         } else  {
-            tlb_invalidate(pgdir, va);
-            *pgtable_entry = (page2pa(pp) | PERM);
+            *vpt0_entry = (PADDR_TO_PTE(page2pa(pp)) | PERM);
+	    tlb_invalidate(vpt2, va);
             return 0;
         }
     }
@@ -555,16 +672,16 @@ page_insert(Pde *pgdir, struct Page *pp, u_long va, u_int perm)
     /* Step 2: Update TLB. */
 
     /* hint: use tlb_invalidate function */
-    tlb_invalidate(pgdir, va);
+    tlb_invalidate(vpt2, va);
 
     /* Step 3: Do check, re-get page table entry to validate the insertion. */
 
     /* Step 3.1 Check if the page can be insert, if can�~@~Yt return -E_NO_MEM */
-    if (pgdir_walk(pgdir, va, 1, &pgtable_entry) == -E_NO_MEM) {
+    if (vpt2_walk(vpt2, va, 1, &vpt0_entry) == -E_NO_MEM) {
         return -E_NO_MEM;
     }
     /* Step 3.2 Insert page and increment the pp_ref */
-    *pgtable_entry = (page2pa(pp) | PERM);
+    *vpt0_entry = (PADDR_TO_PTE(page2pa(pp)) | PERM);
     pp->pp_ref += 1;
     return 0;
 }
@@ -576,28 +693,28 @@ page_insert(Pde *pgdir, struct Page *pp, u_long va, u_int perm)
 //	Return a pointer to corresponding Page, and store it's page table entry to *ppte.
 //	If `va` doesn't mapped to any Page, return NULL.
 struct Page *
-page_lookup(Pde *pgdir, u_long va, Pte **ppte)
+page_lookup(Pte *vpt2, u_int64_t va, Pte **vpt0e)
 {
     struct Page *ppage;
     Pte *pte;
 
     /* Step 1: Get the page table entry. */
-    pgdir_walk(pgdir, va, 0, &pte);
+    vpt2_walk(vpt2, va, 0, &pte);
 
     /* Hint: Check if the page table entry doesn't exist or is not valid. */
-    if (pte == 0) {
-        return 0;
+    if (pte == NULL) {
+        return NULL;
     }
     if ((*pte & PTE_V) == 0) {
-        return 0;    //the page is not in memory.
+        return NULL;    //the page is not in memory.
     }
 
     /* Step 2: Get the corresponding Page struct. */
 
     /* Hint: Use function `pa2page`, defined in include/pmap.h . */
-    ppage = pa2page(PTE_ADDR(*pte));
-    if (ppte) {
-        *ppte = pte;
+    ppage = pa2page(PTE_TO_PADDR(*pte));
+    if (vpt0e) {
+        *vpt0e = pte;
     }
 
     return ppage;
@@ -614,15 +731,15 @@ void page_decref(struct Page *pp) {
 // Overview:
 // 	Unmaps the physical page at virtual address `va`.
 void
-page_remove(Pde *pgdir, u_int64_t va)
+page_remove(Pte *vpt2, u_int64_t va)
 {
-    Pte *pagetable_entry;
+    Pte *vpt0_entry;
     struct Page *ppage;
 
     /* Step 1: Get the page table entry, and check if the page table entry is valid. */
-    ppage = page_lookup(pgdir, va, &pagetable_entry);
+    ppage = page_lookup(vpt2, va, &vpt0_entry);
 
-    if (ppage == 0) {
+    if (ppage == NULL) {
         return;
     }
 
@@ -635,21 +752,21 @@ page_remove(Pde *pgdir, u_int64_t va)
     }
 
     /* Step 3: Update TLB. */
-    *pagetable_entry =  (*pagetable_entry) & (~PTE_V);
-    tlb_invalidate(pgdir, va);
+    *vpt0_entry =  (*vpt0_entry) & (~PTE_V);
+    tlb_invalidate(vpt2, va);
     return;
 }
 
 // Overview:
 // 	Update TLB.
 void
-tlb_invalidate(Pde *pgdir, u_long va)
+tlb_invalidate(Pte *vpt2, u_int64_t va)
 {
-	if (curenv) {
-		tlb_out(PTE_ADDR(va) | GET_ENV_ASID(curenv->env_id));
-	} else {
-		tlb_out(PTE_ADDR(va));
-	}
+	//if (curenv) {
+	//	tlb_out(PTE_ADDR(va) | GET_ENV_ASID(curenv->env_id));
+	//} else {
+		tlb_out(va);
+	//}
 }
 
 void
@@ -658,6 +775,7 @@ physical_memory_manage_check(void)
     struct Page *pp, *pp0, *pp1, *pp2;
     struct Page_list fl;
     int *temp;
+    printf("Start physical_memory_manage_check()\n");
 
     // should be able to allocate three pages
     pp0 = pp1 = pp2 = 0;
@@ -676,21 +794,21 @@ physical_memory_manage_check(void)
     // should be no free memory
     assert(page_alloc(&pp) == -E_NO_MEM);
 
-    temp = (int*)page2kva(pp0);
+    //temp = (int*)page2kva(pp0);
     //write 1000 to pp0
-    *temp = 1000;
+    //*temp = 1000;
     // free pp0
     page_free(pp0);
-    printf("The number in address temp is %d\n",*temp);
+    //printf("The number in address temp is %d\n",*temp);
 
     // alloc again
     assert(page_alloc(&pp0) == 0);
     assert(pp0);
 
     // pp0 should not change
-    assert(temp == (int*)page2kva(pp0));
+    //assert(temp == (int*)page2kva(pp0));
     // pp0 should be zero
-    assert(*temp == 0);
+    //assert(*temp == 0);
 
     page_free_list = fl;
     page_free(pp0);
@@ -879,6 +997,7 @@ void test_vaddr_map(Pte *vpt2, u_int64_t va, u_int64_t pa) {
 	u_int64_t i, pte_value;
 	i = VPN2(va);
 	vpt2_ent = vpt2 + i;
+	printf("VPT2_ENT ADDR:%lx\n", vpt2_ent);
 	pte_value = *vpt2_ent;
 	printf("VPT2_ENTRY(PADDR of VPT1):%lx\n", pte_value);
 	if ((pte_value & PTE_V) == 0) {printf("VPTENT invalid!\n");return;}
@@ -900,14 +1019,28 @@ void test_vaddr_map(Pte *vpt2, u_int64_t va, u_int64_t pa) {
 	vpt0 = (Pte *)(Pte *)PTE_TO_PADDR(pte_value);
 	i = VPN0(va);
 	vpt0_ent = vpt0 + i;
+	printf("VPT0_ENT ADDR:%lx\n", vpt0_ent);
 	pte_value = *vpt0_ent;
-	printf("VPT1_ENTRY(PADDR of VPT0):%lx\n", pte_value);
+	printf("VPT0_ENTRY(PADDR of va):%lx\n", pte_value);
+	printf("Perm:");
+	if ((pte_value & PTE_V)!=0){printf(" Valid ");}
+	if ((pte_value & PTE_R)!=0){printf(" Read ");}
+	if ((pte_value & PTE_W)!=0){printf(" Write ");}
+	if ((pte_value & PTE_X)!=0){printf(" Execute ");}
+	if ((pte_value & PTE_U)!=0){printf(" User ");}
+	printf("\n");
 	if ((pte_value & PTE_V) == 0) {printf("VPTENT invalid!\n");return;}
 	if (((pte_value & PTE_R) == 0) && ((pte_value & PTE_W) == 1)) {
 		printf("VPT ENT NOT READABLE but WRITABLE");
 		return;
 	}
-	printf("va:%lx\npa:%lx\n", PTE_TO_PADDR(pte_value), pa & ~0xfff);
+	
+	va = PTE_TO_PADDR(pte_value);
+	pa = pa & ~0xfff;
+	printf("va:%lx\npa:%lx\n", va, pa);
+	if (va == pa){
+		printf("TEST SUCCESS!\n");
+	}
 	return;
 }
 

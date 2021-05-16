@@ -48,9 +48,10 @@
  *   these are defined by the hardware
  */
 #define PTE_V		0x0001	// Valid bit
-#define PTE_R		0x0002	// Dirty bit ,'0' means only read ,otherwise make interrupt
+#define PTE_R		0x0002	// Read bit
 #define PTE_W		0x0004	// Write bit
-#define PTE_X     	0x008	// Execute bit
+#define PTE_X     	0x0008	// Execute bit
+#define PTE_U     	0x0010	// User mode bit
 #define PTE_COW		0x0100	// Copy On Write, defined by OS
 #define PTE_UC		0x0800	// unCached
 #define PTE_LIBRARY	0x0200	// share memmory, defined by OS
@@ -180,7 +181,7 @@ extern u_int64_t set_exc_vec(u_int64, u_int64);
 // translates from kernel virtual address to physical address.
 #define PADDR(kva)						\
 	({								\
-		u_long a = (u_long) (kva);				\
+		u_int64_t a = (u_int64_t) (kva);				\
 		if (a < ULIM)					\
 			panic("PADDR called with invalid kva %08lx", a);\
 		a - ULIM;						\
@@ -189,9 +190,9 @@ extern u_int64_t set_exc_vec(u_int64, u_int64);
 // translates from physical address to kernel virtual address.
 #define KADDR(pa)						\
 	({								\
-		u_long ppn = PPN(pa);					\
+		u_int64_t ppn = PPN(pa);					\
 		if (ppn >= npage)					\
-			panic("KADDR called with invalid pa %08lx", (u_long)pa);\
+			panic("KADDR called with invalid pa %016lx", (u_int64_t)pa);\
 		(pa) + ULIM;					\
 	})
 

@@ -40,7 +40,7 @@ page2pa(struct Page *pp)
 /* Get the Page struct whose physical address is 'pa'.
  */
 static inline struct Page *
-pa2page(u_long pa)
+pa2page(u_int64_t pa)
 {
 	if (PPN(PADDR2ACTMEM(pa)) >= npage) {
 		panic("pa2page called with invalid pa: %x", pa);
@@ -51,7 +51,7 @@ pa2page(u_long pa)
 
 /* Get the kernel virtual address of Page 'pp'.
  */
-static inline u_long
+static inline u_int64_t
 page2kva(struct Page *pp)
 {
 	return KADDR(page2pa(pp));
@@ -91,11 +91,11 @@ void page_check();
 int page_alloc(struct Page **pp);
 void page_free(struct Page *pp);
 void page_decref(struct Page *pp);
-int pgdir_walk(Pde *pgdir, u_long va, int create, Pte **ppte);
-int page_insert(Pde *pgdir, struct Page *pp, u_long va, u_int perm);
-struct Page *page_lookup(Pde *pgdir, u_long va, Pte **ppte);
-void page_remove(Pde *pgdir, u_long va) ;
-void tlb_invalidate(Pde *pgdir, u_long va);
+int pgdir_walk(Pte *vpt2, u_int64_t va, int create, Pte **vpt0e);
+int page_insert(Pte *vpt2, struct Page *pp, u_int64_t va, u_int perm);
+struct Page *page_lookup(Pte *vpt2, u_int64_t va, Pte **vpt0e);
+void page_remove(Pte *vpt2, u_int64_t va) ;
+void tlb_invalidate(Pte *vpt2, u_int64_t va);
 
 void boot_map_segment(Pde *pgdir, u_long va, u_long size, u_long pa, u_int64_t perm);
 

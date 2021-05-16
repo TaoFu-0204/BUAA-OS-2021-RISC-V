@@ -29,5 +29,10 @@ NOFOUND:
 
         j       ra
         nop*/
-	sfence.vma
+	sfence.vma	zero, zero
+	nop
+	nop
+	nop
+	nop
+	jr	ra
 END(tlb_out)

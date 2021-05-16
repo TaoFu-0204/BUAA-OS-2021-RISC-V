@@ -68,7 +68,7 @@ void bzero(void *b, size_t len)
 
 	max = b + len;
 
-	printf("init.c:\tzero from %lx to %lx\n",b,max);
+	// printf("init.c:\tzero from %lx to %lx\n",b,max);
 	
 	// zero machine words while possible
 
@@ -83,5 +83,5 @@ void bzero(void *b, size_t len)
 	{
 		*(char *)b++ = 0;
 	}		
-	printf("bzero succ!\n");
+	// printf("bzero succ!\n");
 }
