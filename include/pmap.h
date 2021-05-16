@@ -21,8 +21,9 @@ struct Page {
 };
 
 extern struct Page *pages;
+extern struct Page *pages_paddr;
 
-static inline u_long
+static inline u_int64_t
 page2ppn(struct Page *pp)
 {
 	return pp - pages;
@@ -30,10 +31,10 @@ page2ppn(struct Page *pp)
 
 /* Get the physical address of Page 'pp'.
  */
-static inline u_long
+static inline u_int64_t
 page2pa(struct Page *pp)
 {
-	return page2ppn(pp) << PGSHIFT;
+	return (page2ppn(pp) << PGSHIFT) + 0x80000000;
 }
 
 /* Get the Page struct whose physical address is 'pa'.
@@ -41,7 +42,7 @@ page2pa(struct Page *pp)
 static inline struct Page *
 pa2page(u_long pa)
 {
-	if (PPN(pa) >= npage) {
+	if (PPN(PADDR2ACTMEM(pa)) >= npage) {
 		panic("pa2page called with invalid pa: %x", pa);
 	}
 

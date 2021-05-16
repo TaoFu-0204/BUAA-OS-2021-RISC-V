@@ -1,5 +1,5 @@
 #include <asm/asm.h>
-//#include <pmap.h>
+#include <pmap.h>
 //#include <env.h>
 #include <printf.h>
 //#include <kclock.h>
@@ -20,10 +20,13 @@ void riscv_init()
 	riscv_detect_memory();
 	printf("mem dect success!\n");
 	riscv_vm_init();
-	a = UPAGES;//0x7f800000;
-	printf("UPAGES:%lx, ", a);
-	printf("value:%lx\n", *((u_int64_t *)a));
 	page_init();
+	//a = 0x1;//0x7f800000;
+	//printf("page_init succ!\nUPAGES:%lx, ", a);
+	//printf("value:%lx\n", *((u_int64_t *)a));
+
+	physical_memory_manage_check();
+//	page_check();
 	
 	//env_init();
 	
@@ -65,7 +68,7 @@ void bzero(void *b, size_t len)
 
 	max = b + len;
 
-	//printf("init.c:\tzero from %lx to %lx\n",(u_int64_t)b,(u_int64_t)max);
+	printf("init.c:\tzero from %lx to %lx\n",b,max);
 	
 	// zero machine words while possible
 
@@ -80,5 +83,5 @@ void bzero(void *b, size_t len)
 	{
 		*(char *)b++ = 0;
 	}		
-	
+	printf("bzero succ!\n");
 }

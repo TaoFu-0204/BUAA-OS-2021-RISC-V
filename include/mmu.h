@@ -67,7 +67,7 @@
  o                      |   Interrupts & Exception   |  kseg1
  o                      +----------------------------+------------0xa000 0000
  o                      |      Invalid memory        |   /|\
- o                      +----------------------------+----|-------Physics Memory Max
+ o                      +----------------------------+----|-------0x9000 0000 Physics Memory Max
  o                      |       ...                  |  kseg0
  o                      +----------------------------+----|------
  o                      |     RISC-V SV39 VPT2       |    |
@@ -168,6 +168,15 @@ extern u_int64_t set_exc_vec(u_int64, u_int64);
  * We assume that we has 128MB free memory, so max 
  * PADDR is 0x80000000 + 128MB = 2^27B + 0x80000000 = 0x8FFFFFFF
  */
+
+#define PADDR2ACTMEM(pa)							\
+	({									\
+		u_int64_t a = (u_int64_t) (pa);					\
+		if (a < 0x080000000 || a > 0x08FFFFFFF)				\
+			panic("PADDR2ACTMEM called with invalid pa %016lx", a);\
+		a - 0x080000000;							\
+	})
+
 // translates from kernel virtual address to physical address.
 #define PADDR(kva)						\
 	({								\

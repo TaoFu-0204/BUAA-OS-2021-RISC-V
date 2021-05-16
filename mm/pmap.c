@@ -12,9 +12,10 @@ u_int64_t npage;            /* Amount of memory(in pages) */
 u_int64_t basemem;          /* Amount of base memory(in bytes) */
 u_int64_t extmem;           /* Amount of extended memory(in bytes) */
 
-Pde *boot_vpt2;
+Pte *boot_vpt2;
 
 struct Page *pages;
+struct Page *pages_paddr;
 static u_int64_t freemem;
 
 static struct Page_list page_free_list;	/* Free list of physical pages */
@@ -27,10 +28,10 @@ void riscv_detect_memory()
 {
     /* Step 1: Initialize basemem.
      * (When use real computer, CMOS tells us how many kilobytes there are). */
-    maxpa = 0x1U << 26; // 2^26 Bytes, 64MB
+    maxpa = 0x090000000; // 2^26 Bytes, 64MB
     //maxpa = 0x1000000;
     // npage = maxpa >> PGSHIFT; // 2^12 Bytes, 4KB per page
-    basemem = maxpa;
+    basemem = maxpa - 0x080000000;
     npage = basemem / BY2PG;
     extmem = 0;
     // Step 2: Calculate corresponding npage value.
@@ -79,7 +80,7 @@ static void *alloc(u_int64_t n, u_int64_t align, int clear)
     }
 
     /* Step 5: return allocated chunk. */
-printf("alloc() : alloced mem is %lx, freemem is %lx\n", alloced_mem, freemem);
+//printf("alloc() : alloced mem is %lx, freemem is %lx\n", alloced_mem, freemem);
     return (void *)alloced_mem;
 }
 
@@ -119,12 +120,14 @@ static Pte *boot_vpt2_walk(Pte *vpt2, u_int64_t va, int create)
     /* Hint: Use KADDR and PTE_ADDR to get the page table from page directory
      * entry value. */
     vpt2_entryp = vpt2 + VPN2(va);
+    //printf("vpt2_ent_addr:%lx\n", vpt2_entryp);
     vpt1 = (Pte *)PTE_TO_PADDR(*vpt2_entryp);
+    //printf("vpt1addr:%lx\n", vpt1);
 
     /* Step 2: If the corresponding page table is not exist and parameter `create`
      * is set, create one. And set the correct permission bits for this new page
      * table. */
-    if (((*vpt2_entryp) & PTE_V) != PTE_V) {
+    if (((*vpt2_entryp) & PTE_V) == 0) {
         if (create == 1) {
             // Corresponding page table doesn't exist, indicating that 'vpt1' is useless.
             // Need to create one and update vpt2.
@@ -135,8 +138,35 @@ static Pte *boot_vpt2_walk(Pte *vpt2, u_int64_t va, int create)
 
     /* Step 3: Get the page table entry for `va`, and return it. */
     vpt1_entry = vpt1 + VPN1(va);
+printf("Ret:%lx, value:%lx\n", vpt1_entry, *vpt1_entry);
     return vpt1_entry;
 
+}
+
+void boot_map_vpt(Pte *vpt2, Pte *vpt)
+{
+	u_int64_t va = (u_int64_t)vpt, pte;
+	Pte *vpt1, *vpt1_ent, *vpt0, *vpt0_ent;
+	int vpt1_new = 0, vpt0_new = 0;
+	if ((vpt2[VPN2(va)] & PTE_V) == 0) {
+		vpt1_new = 1;
+		vpt1 = (Pte *)alloc(BY2PG, BY2PG, 1);
+		vpt2[VPN2(va)] = PADDR_TO_PTE(vpt1) | PTE_V;
+	}
+	vpt1 = PTE_TO_PADDR(vpt2[VPN2(va)]);
+	if ((vpt1[VPN1(va)] & PTE_V) == 0) {
+		vpt0_new = 1;
+		vpt0 = (Pte *)alloc(BY2PG, BY2PG, 1);
+		vpt1[VPN1(va)] = PADDR_TO_PTE(vpt0) | PTE_V;
+	}
+	vpt0 = PTE_TO_PADDR(vpt1[VPN1(va)]);
+	vpt0[VPN0(va)] = PADDR_TO_PTE(va) | PTE_V | PTE_R;
+	if (vpt1_new) {
+		boot_map_vpt(vpt2, vpt1);
+	}
+	if (vpt0_new) {
+		boot_map_vpt(vpt2, vpt0);
+	}
 }
 
 // Overview:
@@ -170,9 +200,12 @@ printf("With perm %lx to map: va from %lx to %lx, pa from %lx to %lx\n", perm, v
 	//vpt1 = vpt1_entry - (vpt1_entry % BY2PG);
 	vpt1 = (u_int64_t)vpt1_entry & 0xFFFFFFFFFFFFF000;
         *(vpt2 + VPN2(va)) |= PTE_V ;//| perm;
+	boot_map_vpt(vpt2, vpt1);
 	if (size > (VPT1MAP - (va % VPT1MAP))) {
 	    for(j = 0; j < (VPT1MAP - (va % VPT1MAP)); j += BY2PG) {
 		vpt0_entry = boot_vpt1_walk(vpt1, (va + j), 1);
+		vpt0 = (u_int64_t)vpt0_entry & 0xFFFFFFFFFFFFF000;
+		boot_map_vpt(vpt2, vpt0);
 		*vpt0_entry = PADDR_TO_PTE(pa + j) | perm | PTE_V;
 		*(vpt1 + VPN1(va + j)) |= PTE_V ;//| perm;
 	    }
@@ -183,6 +216,8 @@ printf("With perm %lx to map: va from %lx to %lx, pa from %lx to %lx\n", perm, v
 	else {
 	    for(j = 0; j < size; j += BY2PG) {
 		vpt0_entry = boot_vpt1_walk(vpt1, (va + j), 1);
+		vpt0 = (u_int64_t)vpt0_entry & 0xFFFFFFFFFFFFF000;
+		boot_map_vpt(vpt2, vpt0);
 		*vpt0_entry = PADDR_TO_PTE(pa + j) | perm | PTE_V;
 		*(vpt1 + VPN1(va + j)) |= PTE_V; //| perm;
 	    }
@@ -198,8 +233,11 @@ printf("With perm %lx to map: va from %lx to %lx, pa from %lx to %lx\n", perm, v
         vpt1_entry = boot_vpt2_walk(vpt2, (va + i), 1);
 	printf("VPT1_entry value:%lx, PADDR:%lx\n", *vpt1_entry, PTE_TO_PADDR(*vpt1_entry));
 	vpt1 = (u_int64_t)vpt1_entry & 0xFFFFFFFFFFFFF000; //vpt1 = vpt1_entry - (vpt1_entry % BY2PG);
+	boot_map_vpt(vpt2, vpt1);
 	for(j = 0; j < MIN(size - i, VPT1MAP); j += BY2PG) {
 	    vpt0_entry = boot_vpt1_walk(vpt1, (va + i + j), 1);
+	    vpt0 = (u_int64_t)vpt0_entry & 0xFFFFFFFFFFFFF000;
+	    boot_map_vpt(vpt2, vpt0);
 	    *vpt0_entry = PADDR_TO_PTE(pa + i + j) | perm | PTE_V;
 	    *(vpt1 + VPN1(va + i + j)) |= PTE_V ;//| perm;
 	}
@@ -209,6 +247,40 @@ printf("With perm %lx to map: va from %lx to %lx, pa from %lx to %lx\n", perm, v
     Pte *vpt2_entry;
     vpt2_entry = vpt2 + VPN2(va);
     printf("va:%lx, VPT2_entry value:%lx, PADDR:%lx\n", va, *vpt2_entry, PTE_TO_PADDR(*vpt2_entry));
+}
+
+/* Overview:
+ * 	Unmap va, set its leaf PTE to invalid.
+ */
+void boot_unmap(Pte *vpt2, u_int64_t va)
+{
+printf("boot_unmap!\n");
+	Pte *vpt1, *vpt0;
+	u_int64_t pte;
+	pte = (u_int64_t)vpt2[VPN2(va)];
+	if (pte & PTE_V == 0) {
+		return;
+	}
+	if (((pte & PTE_R) == 0) && ((pte & PTE_W) == 1)) {
+		panic("ERR: VPT2 ENTRY ENT NOT READABLE but WRITABLE!!!");
+	}
+
+	vpt1 = (Pte *)PTE_TO_PADDR(pte);
+	pte = vpt1[VPN1(va)];
+	if (pte & PTE_V == 0) {
+		return;
+	}
+	if (((pte & PTE_R) == 0) && ((pte & PTE_W) == 1)) {
+		panic("ERR: VPT1 ENTRY ENT NOT READABLE but WRITABLE!!!");
+	}
+	
+	vpt0 = (Pte *)PTE_TO_PADDR(pte);
+	pte = vpt0[VPN0(va)];
+	if (pte & PTE_V == 0) {
+		return;
+	} else {
+		vpt0[VPN0(va)] = 0;
+	}
 }
 
 
@@ -238,7 +310,8 @@ printf(".bss:\tfrom:%lxto:%lx\n", start_bss, end_bss);
 printf(".data:\tfrom:%lxto:%lx\n", start_data, end_data);
 printf(".kern_stk:\tfrom:%lxto:%lx\n", start_kern_stk, end_kern_stk);
     boot_vpt2 = vpt2;
-    boot_map_segment(vpt2, vpt2, BY2PG, vpt2, PTE_R);
+    //boot_map_segment(vpt2, vpt2, BY2PG, vpt2, PTE_R);
+    boot_map_vpt(vpt2, vpt2);
 
     printf(".text need:0x%lx B\n", (u_int64_t)end_text - (u_int64_t)start_text);
     boot_map_segment(vpt2, start_text, (u_int64_t)end_text - (u_int64_t)start_text, start_text, PTE_R | PTE_X);
@@ -266,31 +339,32 @@ printf(".data need:0x%lx B\n", (u_int64_t)end_data - (u_int64_t)start_data);
     printf("to memory %lx for struct Pages.\n", freemem);
     n = ROUND(npage * sizeof(struct Page), BY2PG);
     boot_map_segment(vpt2, UPAGES, n, pages, PTE_R | PTE_W);
+    pages_paddr = pages;
+    pages = UPAGES;
 
     /* Step 3, Allocate proper size of physical memory for global array `envs`,
      * for process management. Then map the physical address to `UENVS`. */
     envs = (struct Env *)alloc(NENV * sizeof(struct Env), BY2PG, 1);
     n = ROUND(NENV * sizeof(struct Env), BY2PG);
     boot_map_segment(vpt2, UENVS, n, envs, PTE_R | PTE_W);
+    envs_paddr = envs;
+    envs = UENVS;
 
 printf("ready to set vpt at vpt2: %lx, ppn: %lx\n", vpt2, PPN(vpt2));
 
 	printf("TEST:%lx->%lx\n", start_text, start_text);
 	test_vaddr_map(vpt2, start_text, start_text);
-	printf("TEST:%lx->%lx\n", start_data, start_data);
-	test_vaddr_map(vpt2, start_data, start_data);
-	u_int64_t testdata = 0x0000000080203886;
-	printf("TEST:%lx->%lx\n", testdata, testdata);
-	test_vaddr_map(vpt2, testdata, testdata);
+//	printf("TEST:%lx->%lx\n", start_data, start_data);
+//	test_vaddr_map(vpt2, start_data, start_data);
+//	u_int64_t testdata = 0x0000000080203886;
+//	printf("TEST:%lx->%lx\n", testdata, testdata);
+//	test_vaddr_map(vpt2, testdata, testdata);
     /* Set up VPT register. */
     n = set_vpt2(MODE_SV39, 0, PPN(vpt2));
 
     printf("pmap.c:\t risc-v vm init success\n");
-    printf("former satp:%lx\npages:%lx\nenvs:%lx\n", n, pages, envs);
-    u_int64_t *tmpptr = UENVS;
-printf("tmpptr:%lx,*tmpptr:%lx\n", tmpptr, *tmpptr);
-    //*tmpptr = 0x8765432112345678;
-printf("write succ!\n");
+	printf("TEST:%lx->%lx\n", start_text, start_text);
+	test_vaddr_map(vpt2, start_text, start_text);
 }
 
 // Overview: 
@@ -313,12 +387,12 @@ printf("Page_init freemem_round end!\n");
     /* Step 3: Mark all memory blow `freemem` as used(set `pp_ref`
      * filed to 1) */
     int cur;
-    for (cur = 0; cur < PPN(PADDR(freemem)); cur++) {
+    for (cur = 0; cur < PPN(PADDR2ACTMEM(freemem)); cur++) {
         pages[cur].pp_ref = 1;
     }
 printf("Page_init used pages[] init end!\n");
     /* Step 4: Mark the other memory as free. */
-    for (cur = PPN(PADDR(freemem)); cur < npage; cur++) {
+    for (cur = PPN(PADDR2ACTMEM(freemem)); cur < npage; cur++) {
         pages[cur].pp_ref = 0;
         LIST_INSERT_HEAD(&page_free_list, &pages[cur], pp_link);
     }
@@ -343,22 +417,31 @@ int
 page_alloc(struct Page **pp)
 {
     struct Page *ppage_temp;
+printf("page_alloc() start!\n");
 
     /* Step 1: Get a page from free memory. If fails, return the error code.*/
     if (LIST_EMPTY(&page_free_list)) {
 //      panic("mei you kong ye le !!!!!!");
         return -E_NO_MEM;
     }
+printf("1");
     ppage_temp = LIST_FIRST(&page_free_list);
+printf("2");
     LIST_REMOVE(ppage_temp, pp_link);
+printf("3");
     *pp = ppage_temp;
-
+printf("4");
     /* Step 2: Initialize this page.
      * Hint: use `bzero`. */
-    void *page_va;
-    page_va = (void *)ppage_temp;
-//printf("start:%08lx, end:%08lx\n", page_kva, page_kva+BY2PG);
+    /* Note: pa == va. */
+    void *page_pa, *page_va = 0x90000000;
+    page_pa = (void *)page2pa(ppage_temp);
+    boot_map_segment(boot_vpt2, page_va, BY2PG, page_pa, PTE_R | PTE_W);
+tlb_invalidate(boot_vpt2, page_va);
+printf("start:%08lx, end:%08lx\n", page_pa, page_pa+BY2PG);
     bzero(page_va, BY2PG);
+    boot_unmap(boot_vpt2, page_va);
+printf("page_alloc() success!\n");
     return 0;
 
 }
@@ -531,7 +614,7 @@ void page_decref(struct Page *pp) {
 // Overview:
 // 	Unmaps the physical page at virtual address `va`.
 void
-page_remove(Pde *pgdir, u_long va)
+page_remove(Pde *pgdir, u_int64_t va)
 {
     Pte *pagetable_entry;
     struct Page *ppage;
@@ -795,7 +878,7 @@ void test_vaddr_map(Pte *vpt2, u_int64_t va, u_int64_t pa) {
 	Pte *vpt2_ent, *vpt1, *vpt1_ent, *vpt0, *vpt0_ent;
 	u_int64_t i, pte_value;
 	i = VPN2(va);
-	vpt2_ent = &vpt2[i];
+	vpt2_ent = vpt2 + i;
 	pte_value = *vpt2_ent;
 	printf("VPT2_ENTRY(PADDR of VPT1):%lx\n", pte_value);
 	if ((pte_value & PTE_V) == 0) {printf("VPTENT invalid!\n");return;}
@@ -805,7 +888,8 @@ void test_vaddr_map(Pte *vpt2, u_int64_t va, u_int64_t pa) {
 	}
 	vpt1 = (Pte *)PTE_TO_PADDR(pte_value);
 	i = VPN1(va);
-	vpt1_ent = &vpt1[i];
+	vpt1_ent = vpt1 + i;
+	printf("VPT1_ENT ADDR:%lx\n", vpt1_ent);
 	pte_value = *vpt1_ent;
 	printf("VPT1_ENTRY(PADDR of VPT0):%lx\n", pte_value);
 	if ((pte_value & PTE_V) == 0) {printf("VPTENT invalid!\n");return;}
@@ -815,7 +899,7 @@ void test_vaddr_map(Pte *vpt2, u_int64_t va, u_int64_t pa) {
 	}
 	vpt0 = (Pte *)(Pte *)PTE_TO_PADDR(pte_value);
 	i = VPN0(va);
-	vpt0_ent = &vpt0[i];
+	vpt0_ent = vpt0 + i;
 	pte_value = *vpt0_ent;
 	printf("VPT1_ENTRY(PADDR of VPT0):%lx\n", pte_value);
 	if ((pte_value & PTE_V) == 0) {printf("VPTENT invalid!\n");return;}

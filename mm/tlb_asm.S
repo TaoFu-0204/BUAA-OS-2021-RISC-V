@@ -29,4 +29,5 @@ NOFOUND:
 
         j       ra
         nop*/
+	sfence.vma
 END(tlb_out)
